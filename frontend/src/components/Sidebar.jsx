@@ -18,6 +18,7 @@ const Sidebar = ({
   onDrawRectangle,
   onSearch,
   onHighlightPlot,
+  onShowDetails,
   stats,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,15 +174,58 @@ const Sidebar = ({
           </div>
         </div>
 
+        {/* Plot Selection */}
+        <div className="mb-6">
+          <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
+            <MapPin className="w-4 h-4 text-cyan-400" />
+            Select Plot
+          </label>
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                onHighlightPlot({
+                  filename: e.target.value,
+                  label: e.target.options[e.target.selectedIndex].text,
+                  color: "#00ffff",
+                  isComparison: false,
+                });
+              }
+            }}
+            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-400 transition-all appearance-none cursor-pointer"
+          >
+            <option value="" className="bg-[#0a0a15]">Choose a Plot...</option>
+            <option value="/plot.json" className="bg-[#0a0a15]">Plot 1 (Primary)</option>
+            <option value="/plot2.json" className="bg-[#0a0a15]">Plot 2 (Secondary)</option>
+          </select>
+        </div>
+
+        {/* Comparison Selection */}
+        <div className="mb-6">
+          <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
+            <RefreshCw className="w-4 h-4 text-orange-400" />
+            Comparison Data
+          </label>
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                onHighlightPlot({
+                  filename: e.target.value,
+                  label: e.target.options[e.target.selectedIndex].text,
+                  color: "#ff8c00", // Orange for comparison
+                  isComparison: true,
+                });
+              }
+            }}
+            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-400 transition-all appearance-none cursor-pointer"
+          >
+            <option value="" className="bg-[#0a0a15]">Select Comparison...</option>
+            <option value="/comparison.json" className="bg-[#0a0a15]">Comparison 1</option>
+            <option value="/comparison3.json" className="bg-[#0a0a15]">Comparison 2</option>
+          </select>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col gap-2 mb-6">
-          <button
-            onClick={onHighlightPlot}
-            className="flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg text-white text-sm font-bold shadow-lg hover:shadow-cyan-500/50 transition-all hover:-translate-y-1 border border-cyan-300/30 group"
-          >
-            <MapPin className="w-5 h-5 group-hover:animate-bounce" />
-            Highlight Area (plot.json)
-          </button>
           <button
             onClick={onLoadImagery}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-lg text-white text-sm font-semibold shadow-lg hover:shadow-xl hover:shadow-[#667eea]/50 transition-all hover:-translate-y-0.5"
@@ -197,6 +241,32 @@ const Sidebar = ({
             Analyze Changes
           </button>
         </div>
+
+        {/* Analysis Summary */}
+        {stats.analysis && (
+          <div className="mb-6 p-4 bg-gradient-to-br from-[#ff00ff]/10 to-transparent border border-[#ff00ff]/30 rounded-xl">
+            <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-white">
+              <RefreshCw className="w-4 h-4 text-[#ff00ff] animate-spin-slow" />
+              Spatial Analysis
+            </h3>
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-400">Similarity:</span>
+                <span className="text-[#43e97b] font-bold">{stats.analysis.matchPercentage}%</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-400">Deviation:</span>
+                <span className="text-orange-400 font-bold">{stats.analysis.lostArea} ha</span>
+              </div>
+            </div>
+            <button
+              onClick={onShowDetails}
+              className="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-white text-xs font-bold transition-all active:scale-95"
+            >
+              View Full Details
+            </button>
+          </div>
+        )}
 
         {/* Statistics Panel */}
         <div className="p-4 bg-white/5 border border-white/10 rounded-xl">

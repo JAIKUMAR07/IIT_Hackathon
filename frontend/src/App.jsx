@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import SatelliteMap from "./components/SatelliteMap";
+import AnalysisModal from "./components/AnalysisModal";
 import "./App.css";
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
     imageCount: 0,
     status: "Ready",
   });
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleLoadImagery = () => {
     console.log("Loading imagery...");
@@ -32,6 +34,12 @@ function App() {
     if (mapRef.current?.clearDrawings) {
       mapRef.current.clearDrawings();
     }
+    setStats({
+      area: 0,
+      perimeter: 0,
+      imageCount: 0,
+      status: "Ready",
+    });
   };
 
   const handleDrawBoundary = () => {
@@ -58,9 +66,9 @@ function App() {
     }
   };
 
-  const handleHighlightPlot = () => {
+  const handleHighlightPlot = (config) => {
     if (mapRef.current?.highlightPlot) {
-      mapRef.current.highlightPlot();
+      mapRef.current.highlightPlot(config);
     }
   };
 
@@ -88,6 +96,7 @@ function App() {
           onDrawRectangle={handleDrawRectangle}
           onSearch={handleSearch}
           onHighlightPlot={handleHighlightPlot}
+          onShowDetails={() => setIsModalOpen(true)}
           stats={stats}
         />
 
@@ -96,6 +105,13 @@ function App() {
           <SatelliteMap ref={mapRef} onStatsUpdate={setStats} />
         </section>
       </main>
+
+      {/* Details Modal */}
+      <AnalysisModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        data={stats.analysis}
+      />
     </div>
   );
 }

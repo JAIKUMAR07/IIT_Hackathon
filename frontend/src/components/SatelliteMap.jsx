@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
 } from "react";
 import L from "leaflet";
+import * as turf from "@turf/turf";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import "leaflet-draw";
@@ -17,6 +18,7 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
   const drawnItemsRef = useRef(null);
   const currentLayerRef = useRef(null);
   const searchMarkerRef = useRef(null);
+  const activeDataRef = useRef({ plot: null, comparison: null });
 
   const [selectedBoundary, setSelectedBoundary] = useState(null);
   const [coordinates, setCoordinates] = useState({ lat: 28.6139, lng: 77.209 });
@@ -558,9 +560,10 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
         }
       }, 2000);
     },
-    highlightPlot: async () => {
+    highlightPlot: async (config = { filename: "/plot.json", label: "Highlighted Plot", color: "#00ffff", isComparison: false }) => {
       try {
-        const response = await fetch("/plot.json");
+        const { filename, label, color, isComparison } = config;
+        const response = await fetch(filename);
         const data = await response.json();
 
         if (!data || !Array.isArray(data)) return;
@@ -604,51 +607,158 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
           return [lat, lng];
         };
 
-        const latlngs = data.map((coord) => utmToLatLng(coord[0], coord[1]));
+        const latlngs = data ? data.map((coord) => utmToLatLng(coord[0], coord[1])) : null;
+
+        // Store in activeDataRef
+        if (isComparison) {
+          activeDataRef.current.comparison = latlngs ? { latlngs, label, color, filename } : null;
+        } else {
+          activeDataRef.current.plot = latlngs ? { latlngs, label, color, filename } : null;
+        }
 
         if (mapInstanceRef.current && drawnItemsRef.current) {
-          // Clear previous drawings if needed or just add new one
-          // drawnItemsRef.current.clearLayers();
+          drawnItemsRef.current.clearLayers();
 
-          const polygon = L.polygon(latlngs, {
-            color: "#00ffff", // Bright Cyan
-            fillColor: "#00ffff",
-            fillOpacity: 0.4,
-            weight: 3,
-            className: "bright-highlight",
-          }).addTo(drawnItemsRef.current);
+          const { plot, comparison } = activeDataRef.current;
 
-          // Add a glow effect using a second polygon with larger weight and lower opacity
-          L.polygon(latlngs, {
-            color: "#00ffff",
-            fillColor: "transparent",
-            fillOpacity: 0,
-            weight: 8,
-            opacity: 0.3,
-            className: "glow-highlight",
-          }).addTo(drawnItemsRef.current);
+          // Helper to create GeoJSON polygon
+          const toTurfPolygon = (coords) => {
+            if (!coords || coords.length < 3) return null;
+            // Turf expects [lng, lat]
+            const turfCoords = coords.map(c => [c[1], c[0]]);
+            // Ensure closed
+            if (turfCoords[0][0] !== turfCoords[turfCoords.length - 1][0] ||
+              turfCoords[0][1] !== turfCoords[turfCoords.length - 1][1]) {
+              turfCoords.push([...turfCoords[0]]);
+            }
+            try {
+              return turf.polygon([turfCoords]);
+            } catch (e) {
+              console.warn("Invalid polygon for turf:", e);
+              return null;
+            }
+          };
 
-          // Zoom to the plot
-          mapInstanceRef.current.fitBounds(polygon.getBounds(), {
-            padding: [50, 50],
-            maxZoom: 18,
-            animate: true,
-            duration: 1.5,
-          });
+          if (plot && comparison) {
+            const plotPoly = toTurfPolygon(plot.latlngs);
+            const compPoly = toTurfPolygon(comparison.latlngs);
 
-          // Add a popup
-          polygon.bindPopup(`
-            <div style="font-family: Inter, sans-serif; padding: 8px;">
-              <h4 style="margin: 0 0 4px 0; color: #00ffff; text-shadow: 0 0 2px rgba(0,0,0,0.5);">🌟 Highlighted Plot</h4>
-              <p style="margin: 0; font-size: 12px; color: #444;">Area loaded from plot.json</p>
-            </div>
-          `).openPopup();
+            if (plotPoly && compPoly) {
+              // 1. Calculate Intersection (Overlap)
+              const intersection = turf.intersect(turf.featureCollection([plotPoly, compPoly]));
 
-          if (onStatsUpdate) {
-            onStatsUpdate((prev) => ({
-              ...prev,
-              status: "Plot Highlighted",
-            }));
+              // 2. Calculate Plot Difference (Plot - Comparison)
+              const plotDiff = turf.difference(turf.featureCollection([plotPoly, compPoly]));
+
+              // 3. Calculate Comparison Difference (Comparison - Plot)
+              const compDiff = turf.difference(turf.featureCollection([compPoly, plotPoly]));
+
+              const glassFill = { fillOpacity: 0.5 };
+
+              // Render Plot Difference (Cyan)
+              if (plotDiff) {
+                L.geoJSON(plotDiff, {
+                  style: { color: "#00ffff", fillColor: "#00ffff", ...glassFill, weight: 3, opacity: 0.8 }
+                }).addTo(drawnItemsRef.current);
+              }
+
+              // Render Comparison Difference (Orange)
+              if (compDiff) {
+                L.geoJSON(compDiff, {
+                  style: { color: "#ff8c00", fillColor: "#ff8c00", ...glassFill, weight: 3, opacity: 0.8 }
+                }).addTo(drawnItemsRef.current);
+              }
+
+              // Render Overlap (Vivid Magenta with high contrast)
+              if (intersection) {
+                const overlapLayer = L.geoJSON(intersection, {
+                  style: {
+                    color: "#f0f",
+                    fillColor: "#f0f",
+                    fillOpacity: 0.6,
+                    weight: 6,
+                    dashArray: "1, 10", // Dots for edge distinction
+                    lineJoin: "round"
+                  }
+                }).addTo(drawnItemsRef.current);
+
+                // Add a solid inner boundary for overlap
+                L.geoJSON(intersection, {
+                  style: { color: "#fff", weight: 2, fillOpacity: 0, opacity: 0.8 }
+                }).addTo(drawnItemsRef.current);
+
+                overlapLayer.bindPopup(`
+                  <div style="font-family: Inter, sans-serif; padding: 10px; min-width: 200px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                      <span style="font-size: 20px;">🚨</span>
+                      <h4 style="margin: 0; color: #f0f; font-weight: 800;">DATA OVERLAP</h4>
+                    </div>
+                    <div style="font-size: 13px; color: #374151; line-height: 1.4;">
+                      Intersection detected between:<br/>
+                      • <strong style="color: #00ffff;">${plot.label}</strong><br/>
+                      • <strong style="color: #ff8c00;">${comparison.label}</strong>
+                    </div>
+                  </div>
+                `).openPopup();
+              }
+
+              // Calculate sub-areas
+              const overlapArea = intersection ? turf.area(intersection) / 10000 : 0;
+              const plotDiffArea = plotDiff ? turf.area(plotDiff) / 10000 : 0;
+              const compDiffArea = compDiff ? turf.area(compDiff) / 10000 : 0;
+
+              const allBounds = L.featureGroup([
+                L.polygon(plot.latlngs),
+                L.polygon(comparison.latlngs)
+              ]).getBounds();
+              mapInstanceRef.current.fitBounds(allBounds, { padding: [50, 50], animate: true });
+
+              const plotArea = turf.area(plotPoly) / 10000;
+              const compArea = turf.area(compPoly) / 10000;
+
+              if (onStatsUpdate) {
+                onStatsUpdate({
+                  area: plotArea.toFixed(2),
+                  perimeter: (mapInstanceRef.current.distance(plot.latlngs[0], plot.latlngs[1]) * plot.latlngs.length).toFixed(2), // Rough estimate or use L.GeometryUtil if available
+                  imageCount: 15,
+                  status: "Overlap Analysis Active",
+                  analysis: {
+                    overlapArea: overlapArea.toFixed(2),
+                    addedArea: plotDiffArea.toFixed(2),
+                    lostArea: compDiffArea.toFixed(2),
+                    matchPercentage: ((overlapArea / compArea) * 100).toFixed(1),
+                    plotLabel: plot.label,
+                    compLabel: comparison.label
+                  }
+                });
+              }
+            }
+          } else if (plot || comparison) {
+            const active = plot || comparison;
+            const polygon = L.polygon(active.latlngs, {
+              color: active.color,
+              fillColor: active.color,
+              fillOpacity: 0.4,
+              weight: 4,
+              className: "bright-highlight",
+            }).addTo(drawnItemsRef.current);
+
+            L.polygon(active.latlngs, {
+              color: active.color,
+              weight: 12,
+              opacity: 0.15,
+              fillOpacity: 0,
+            }).addTo(drawnItemsRef.current);
+
+            mapInstanceRef.current.fitBounds(polygon.getBounds(), { padding: [50, 50], animate: true });
+
+            polygon.bindPopup(`
+              <div style="font-family: Inter, sans-serif; padding: 8px;">
+                <h4 style="margin: 0 0 4px 0; color: ${active.color};">🌟 ${active.label}</h4>
+                <p style="margin: 0; font-size: 12px; color: #444;">Active selection from ${active.filename}</p>
+              </div>
+            `).openPopup();
+
             calculateStatistics(polygon);
           }
         }
