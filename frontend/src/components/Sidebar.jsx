@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Search,
-  Calendar,
-  Globe,
-  Cloud,
   Edit3,
   Square,
   Trash2,
@@ -16,15 +13,12 @@ const Sidebar = ({
   onLoadImagery,
   onAnalyzeChanges,
   onClearDrawing,
+  onDrawBoundary,
   onDrawPolygon,
   onDrawRectangle,
   onSearch,
   stats,
 }) => {
-  const [startDate, setStartDate] = useState("2024-01-01");
-  const [endDate, setEndDate] = useState("2024-12-31");
-  const [cloudCover, setCloudCover] = useState(20);
-  const [layerType, setLayerType] = useState("sentinel2-rgb");
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -84,7 +78,7 @@ const Sidebar = ({
     <aside className="w-full h-full bg-white/5 backdrop-blur-md border-r border-white/10 overflow-y-auto">
       <div className="p-8">
         <h2 className="text-xl font-bold mb-6 bg-gradient-to-r from-[#667eea] to-[#764ba2] bg-clip-text text-transparent">
-          Satellite Controls
+          Map Controls
         </h2>
 
         {/* Location Search */}
@@ -137,93 +131,40 @@ const Sidebar = ({
           )}
         </div>
 
-        {/* Date Range */}
-        <div className="mb-6">
-          <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
-            <Calendar className="w-4 h-4 text-[#667eea]" />
-            Date Range
-          </label>
-          <div className="flex flex-col gap-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#667eea] focus:ring-2 focus:ring-[#667eea]/20 transition-all"
-            />
-            <span className="text-xs text-gray-400 text-center">to</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#667eea] focus:ring-2 focus:ring-[#667eea]/20 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Satellite Layer */}
-        <div className="mb-6">
-          <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
-            <Globe className="w-4 h-4 text-[#667eea]" />
-            Satellite Layer
-          </label>
-          <select
-            value={layerType}
-            onChange={(e) => setLayerType(e.target.value)}
-            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-[#667eea] focus:ring-2 focus:ring-[#667eea]/20 transition-all cursor-pointer"
-          >
-            <option value="sentinel2-rgb">Sentinel-2 RGB (10m)</option>
-            <option value="sentinel2-ndvi">Sentinel-2 NDVI</option>
-            <option value="sentinel2-false-color">False Color Composite</option>
-            <option value="landsat8">Landsat 8 (30m)</option>
-          </select>
-        </div>
-
-        {/* Cloud Coverage */}
-        <div className="mb-6">
-          <label className="flex items-center justify-between text-sm font-semibold text-white mb-2">
-            <span className="flex items-center gap-2">
-              <Cloud className="w-4 h-4 text-[#667eea]" />
-              Max Cloud Cover
-            </span>
-            <span className="text-[#667eea]">{cloudCover}%</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={cloudCover}
-            onChange={(e) => setCloudCover(e.target.value)}
-            className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-[#667eea] [&::-webkit-slider-thumb]:to-[#764ba2] [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer hover:[&::-webkit-slider-thumb]:shadow-lg hover:[&::-webkit-slider-thumb]:shadow-[#667eea]/50"
-          />
-        </div>
-
         {/* Drawing Tools */}
         <div className="mb-6">
           <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
             <Edit3 className="w-4 h-4 text-[#667eea]" />
             Drawing Tools
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onDrawBoundary}
+              className="flex flex-col items-center gap-2 px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 hover:border-[#667eea] hover:text-white transition-all hover:-translate-y-0.5"
+            >
+              <Scan className="w-5 h-5 text-red-500" />
+              Industry Boundary
+            </button>
             <button
               onClick={onDrawPolygon}
               className="flex flex-col items-center gap-2 px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 hover:border-[#667eea] hover:text-white transition-all hover:-translate-y-0.5"
             >
-              <Edit3 className="w-5 h-5" />
-              Polygon
+              <Edit3 className="w-5 h-5 text-blue-500" />
+              Draw Plot
             </button>
             <button
               onClick={onDrawRectangle}
               className="flex flex-col items-center gap-2 px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 hover:border-[#667eea] hover:text-white transition-all hover:-translate-y-0.5"
             >
-              <Square className="w-5 h-5" />
-              Rectangle
+              <Square className="w-5 h-5 text-blue-500" />
+              Rect Plot
             </button>
             <button
               onClick={onClearDrawing}
               className="flex flex-col items-center gap-2 px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs font-medium hover:bg-white/10 hover:border-[#667eea] hover:text-white transition-all hover:-translate-y-0.5"
             >
-              <Trash2 className="w-5 h-5" />
-              Clear
+              <Trash2 className="w-5 h-5 text-gray-400" />
+              Clear All
             </button>
           </div>
         </div>

@@ -34,6 +34,12 @@ function App() {
     }
   };
 
+  const handleDrawBoundary = () => {
+    if (mapRef.current?.startBoundaryDraw) {
+      mapRef.current.startBoundaryDraw();
+    }
+  };
+
   const handleDrawPolygon = () => {
     if (mapRef.current?.startPolygonDraw) {
       mapRef.current.startPolygonDraw();
@@ -71,6 +77,7 @@ function App() {
           onLoadImagery={handleLoadImagery}
           onAnalyzeChanges={handleAnalyzeChanges}
           onClearDrawing={handleClearDrawing}
+          onDrawBoundary={handleDrawBoundary}
           onDrawPolygon={handleDrawPolygon}
           onDrawRectangle={handleDrawRectangle}
           onSearch={handleSearch}
