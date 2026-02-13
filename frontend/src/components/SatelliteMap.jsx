@@ -25,7 +25,8 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
   // Form State
   const [showForm, setShowForm] = useState(false);
   const [pendingLayer, setPendingLayer] = useState(null);
-  const [drawMode, setDrawMode] = useState('plot'); // 'boundary' or 'plot'
+  const [drawMode, setDrawMode] = useState("plot"); // 'boundary' or 'plot'
+  const [detectedParentArea, setDetectedParentArea] = useState(null);
 
   // Initialize map
   useEffect(() => {
@@ -174,11 +175,38 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
     map.on(L.Draw.Event.CREATED, (e) => {
       const layer = e.layer;
 
-      // If rectangle tool was used, we still treat it as the current drawMode (usually plot)
-      // but if we want specifically to allow user to toggle, we'll use drawMode state.
+      // Calculate center to check containment
+      const center = layer.getBounds().getCenter();
+      let parentContext = null;
+
+      // Check if this new layer is inside any existing Industry Boundary
+      drawnItemsRef.current.eachLayer((existingLayer) => {
+        // We need a way to identify if an existing layer is a boundary.
+        // We can check if it has 'boundaryType' in its options or popup content,
+        // but cleaner is to store metadata on the layer object itself.
+        if (
+          existingLayer.userData &&
+          existingLayer.userData.type === "boundary"
+        ) {
+          // Check if center is inside this polygon
+          // Leaflet's contains is for bounds, but for polygon shape we can use a simple point-in-polygon check
+          // or just check bounds for MVP if shapes are simple rectangles.
+          // Better: use bounds intersection as a proxy for "is inside area"
+          if (existingLayer.getBounds().contains(center)) {
+            // Found a parent boundary, extract relevant context
+            parentContext = {
+              industrialArea: existingLayer.userData.name,
+              district: existingLayer.userData.district,
+              // Add other inherited fields if necessary
+            };
+          }
+        }
+      });
 
       map.addLayer(layer);
       setPendingLayer(layer);
+      // Pass the detected parent context to the form
+      setDetectedParentArea(parentContext);
       setShowForm(true);
       calculateStatistics(layer);
     });
@@ -230,157 +258,212 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
   const handleFormSubmit = (data) => {
     if (!pendingLayer || !drawnItemsRef.current) return;
 
-    const { status, category, district, location, plotType, plotNumber, industrialArea, sector } = data;
+    const {
+      category,
+      color,
+      district,
+      location,
+      plotNumber,
+      industrialArea,
+      sector,
+      status,
+      boundaryType,
+    } = data;
 
-    let color = '#667eea';
-    let fillColor = '#667eea';
+    // Use the color selected in the form, or fallbacks
+    let finalColor = color || "#667eea";
+    let fillColor = color || "#667eea";
     let dashArray = null;
     let weight = 2;
-    let fillOpacity = 0.4;
+    let fillOpacity = 0.5;
 
-    if (drawMode === 'boundary') {
-      color = '#ef4444'; // Red for boundary
-      fillColor = 'transparent';
-      dashArray = '5, 10'; // Dashed line
-      weight = 3;
+    // Persist data to the layer for future retrieval
+    pendingLayer.userData = {
+      ...data,
+      type: drawMode === "boundary" ? "boundary" : "plot",
+      name: drawMode === "boundary" ? location : "", // Use location as the name for the boundary
+    };
+
+    // Boundary Mode Styling
+    if (drawMode === "boundary") {
+      finalColor = "#ef4444";
+      fillColor = "transparent";
+      dashArray = "10, 10"; // Dashed line
+      weight = 4;
       fillOpacity = 0;
     } else {
-      if (status === 'Available') {
-        color = '#22c55e';
-        fillColor = '#4ade80';
-      } else if (status === 'Allotted') {
-        color = '#ef4444';
-        fillColor = '#f87171';
-      } else if (status === 'Unavailable') {
-        color = '#3b82f6';
-        fillColor = '#60a5fa';
-      }
+      // Plot Mode Styling
+      // For industrial plots, we might want to respect the status color override if user wants that
+      // But the user specifically asked for "choose plot with red color box", so we prioritize the selected category color.
+      // However, if the category is 'Industrial Plot', we might want to let the Status dictate the shade or just stick to Red.
+      // The current form sets 'Industrial Plot' to Red.
+      // If the user selects "Green Area", it's green.
     }
 
     pendingLayer.setStyle({
-      color: color,
+      color: finalColor,
       fillColor: fillColor,
       fillOpacity: fillOpacity,
       weight: weight,
-      dashArray: dashArray
+      dashArray: dashArray,
     });
 
-    let popupContent = '';
+    // Add Label to the center (Plot Number or Category Name)
+    // Only add label if it's a plot or if it has a meaningful name
+    const center = pendingLayer.getBounds().getCenter();
+    let labelContent = "";
 
-    if (drawMode === 'boundary') {
-      popupContent = `
-        <div style="font-family: 'Inter', sans-serif; min-width: 250px; padding: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #ef4444; padding-bottom: 8px;">
-             <h3 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-               <span style="font-size: 18px;">🏢</span> Amenity Information
-             </h3>
-             <span style="cursor: pointer; font-size: 18px; color: #9ca3af;" onclick="this.closest('.leaflet-popup').remove()">&times;</span>
-          </div>
-          
-          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-            <tr style="border-bottom: 1px solid #f3f4f6;">
-              <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Category</td>
-              <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${category || 'N/A'}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #f3f4f6;">
-              <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">District Name</td>
-              <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${district || 'N/A'}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #f3f4f6;">
-              <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Location</td>
-              <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${location || 'N/A'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Plot Type</td>
-              <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${plotType || 'N/A'}</td>
-            </tr>
-          </table>
-
-          <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; color: #ef4444;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-            <span style="font-size: 12px; font-weight: 600;">Location</span>
-            <span style="font-size: 12px; color: #6b7280; margin-left: auto;">${coordinates.lat}°N, ${coordinates.lng}°E</span>
-          </div>
-          
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-            <button style="background: #3b82f6; color: white; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-              <span>🗺️</span> View on Map
-            </button>
-            <button style="background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-              <span>⤴️</span> Get Directions
-            </button>
-          </div>
-        </div>
-      `;
+    if (drawMode === "boundary") {
+      // For boundary, maybe show "District Boundary" text? Or skip.
+      // Skipping for now to keep it clean like image 1
     } else {
+      if (category === "Industrial Plot" && plotNumber) {
+        labelContent = `<span style="font-weight: 800; font-size: 14px; text-shadow: 0 0 4px #000;">${plotNumber}</span>`;
+      } else if (category && category !== "Industrial Plot") {
+        labelContent = `<span style="font-weight: 600; font-size: 10px; text-transform: uppercase; text-shadow: 0 0 4px #000;">${category}</span>`;
+      }
+    }
+
+    if (labelContent) {
+      const labelIcon = L.divIcon({
+        className: "plot-label",
+        html: `<div style="color: white; text-align: center; white-space: nowrap;">${labelContent}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0], // Centered roughly by CSS if needed, or we rely on the div centering
+      });
+
+      const labelMarker = L.marker(center, {
+        icon: labelIcon,
+        interactive: false, // Click through to polygon
+        zIndexOffset: 1000,
+      }).addTo(drawnItemsRef.current);
+
+      // Store reference to label in the layer for potential deletion later
+      pendingLayer.labelMarker = labelMarker;
+    }
+
+    // Popup Content Construction
+    let popupContent = "";
+    // Styles for Popup
+    const styles = {
+      popup: "font-family: 'Inter', sans-serif; min-width: 260px; padding: 0;",
+      header: `display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 2px solid ${finalColor}; background: #f9fafb; border-radius: 8px 8px 0 0;`,
+      title:
+        "margin: 0; color: #1f2937; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;",
+      closeBtn:
+        "cursor: pointer; font-size: 18px; color: #9ca3af; line-height: 1;",
+      content: "padding: 0;",
+      table: "width: 100%; border-collapse: collapse; font-size: 13px;",
+      tdKey:
+        "padding: 10px 16px; color: #6b7280; font-weight: 500; border-bottom: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6; width: 40%; background: #fff;",
+      tdValue:
+        "padding: 10px 16px; color: #1f2937; font-weight: 600; border-bottom: 1px solid #f3f4f6; background: #fff;",
+      locationBox:
+        "display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;",
+    };
+
+    // Location HTML (Bottom)
+    const locationBottomHtml = `
+      <div style="${styles.locationBox}">
+        <span style="color: #ef4444; font-size: 18px;">📍</span>
+        <div style="display: flex; flex-direction: column;">
+           <span style="font-size: 12px; font-weight: 700; color: #1f2937;">Location</span>
+           <span style="font-size: 11px; font-family: monospace; color: #6b7280;">
+             ${center.lat.toFixed(7)}°N, ${center.lng.toFixed(7)}°E
+           </span>
+        </div>
+      </div>
+    `;
+
+    if (drawMode === "boundary") {
       popupContent = `
-        <div style="font-family: 'Inter', sans-serif; min-width: 250px; padding: 10px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">
-             <h3 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-               <span style="font-size: 18px;">🏭</span> Industrial Plot Information
+        <div style="${styles.popup}">
+          <div style="${styles.header} border-bottom-color: #ef4444;">
+             <h3 style="${styles.title}">
+               <span style="font-size: 18px;">🚧</span> Boundary Info
              </h3>
-             <span style="cursor: pointer; font-size: 18px; color: #9ca3af;" onclick="this.closest('.leaflet-popup').remove()">&times;</span>
+             <span style="${styles.closeBtn}" onclick="this.closest('.leaflet-popup').remove()">&times;</span>
           </div>
           
-          <div style="max-height: 200px; overflow-y: auto; margin-right: -5px; padding-right: 5px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">District</td>
-                <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${district || 'N/A'}</td>
+          <div style="${styles.content}">
+            <table style="${styles.table}">
+              <tr>
+                <td style="${styles.tdKey}">Type</td>
+                <td style="${styles.tdValue}">${boundaryType || "N/A"}</td>
               </tr>
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Sector</td>
-                <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${sector || 'N/A'}</td>
+              <tr>
+                <td style="${styles.tdKey}">Name</td>
+                <td style="${styles.tdValue}">${location || "N/A"}</td>
               </tr>
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Industrial Area</td>
-                <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${industrialArea || 'N/A'}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Plot Type</td>
-                <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${plotType || 'N/A'}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Plot Number</td>
-                <td style="padding: 8px 0; color: #1f2937; text-align: right; font-weight: 600;">${plotNumber || 'N/A'}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Status</td>
-                <td style="padding: 8px 0; text-align: right;">
-                  <span style="font-size: 11px; padding: 4px 10px; border-radius: 4px; background: ${color}20; color: ${color}; border: 1px solid ${color}; font-weight: 800; text-transform: uppercase;">
-                    ${status}
-                  </span>
-                </td>
+               <tr>
+                <td style="${styles.tdKey}">District</td>
+                <td style="${styles.tdValue}">${district || "N/A"}</td>
               </tr>
             </table>
           </div>
+          ${locationBottomHtml}
+        </div>
+      `;
+    } else {
+      // Logic for Plots
+      const isIndustrial = category === "Industrial Plot";
+      const title = isIndustrial
+        ? "Industrial Plot Information"
+        : "Amenity Information";
+      const icon = isIndustrial ? "🏭" : "🏢";
 
-          <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; color: #2563eb;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-            <span style="font-size: 12px; font-weight: 600;">Location</span>
-            <span style="font-size: 12px; color: #6b7280; margin-left: auto;">${coordinates.lat}°N, ${coordinates.lng}°E</span>
-          </div>
+      let tableRows = "";
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-            <button style="background: #3b82f6; color: white; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-              <span>🗺️</span> View on Map
-            </button>
-            <button style="background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-              <span>⤴️</span> Get Directions
-            </button>
+      if (isIndustrial) {
+        // Image 3 Structure
+        tableRows = `
+          <tr><td style="${styles.tdKey}">District</td><td style="${styles.tdValue}">${district || "N/A"}</td></tr>
+          <tr><td style="${styles.tdKey}">Sector</td><td style="${styles.tdValue}">${sector || "Others"}</td></tr>
+          <tr><td style="${styles.tdKey}">Industrial Area</td><td style="${styles.tdValue}">${industrialArea || "N/A"}</td></tr>
+          <tr><td style="${styles.tdKey}">Plot Type</td><td style="${styles.tdValue}">${plotType || "Industrial Purpose"}</td></tr>
+          <tr><td style="${styles.tdKey}">Plot Number</td><td style="${styles.tdValue}">${plotNumber || "N/A"}</td></tr>
+          <tr>
+            <td style="${styles.tdKey}">Status</td>
+            <td style="${styles.tdValue}">
+               <span style="font-size: 10px; padding: 4px 8px; border-radius: 4px; background: ${status === "Available" ? "#dcfce7" : status === "Allotted" ? "#fee2e2" : "#dbeafe"}; color: ${status === "Available" ? "#166534" : status === "Allotted" ? "#991b1b" : "#1e40af"}; font-weight: 700; text-transform: uppercase;">
+                 ${status || "N/A"}
+               </span>
+            </td>
+          </tr>
+        `;
+      } else {
+        // Image 1/2 Structure
+        tableRows = `
+          <tr><td style="${styles.tdKey}">Category</td><td style="${styles.tdValue}">${(category || "").toUpperCase()}</td></tr>
+          <tr><td style="${styles.tdKey}">District Name</td><td style="${styles.tdValue}">${district || "N/A"}</td></tr>
+          <tr><td style="${styles.tdKey}">Location</td><td style="${styles.tdValue}">${location || "N/A"}</td></tr>
+          <tr><td style="${styles.tdKey}">Plot Type</td><td style="${styles.tdValue}">N/A</td></tr>
+        `;
+      }
+
+      popupContent = `
+        <div style="${styles.popup}">
+          <div style="${styles.header}">
+             <h3 style="${styles.title}">
+               <span style="font-size: 18px;">${icon}</span> ${title}
+             </h3>
+             <span style="${styles.closeBtn}" onclick="this.closest('.leaflet-popup').remove()">&times;</span>
           </div>
+          
+          <div style="${styles.content}">
+            <table style="${styles.table}">
+              ${tableRows}
+            </table>
+          </div>
+          ${locationBottomHtml}
         </div>
       `;
     }
 
-    pendingLayer.bindPopup(popupContent, { maxWidth: 300, className: 'custom-popup' });
-
+    pendingLayer.bindPopup(popupContent, {
+      maxWidth: 300,
+      className: "custom-popup",
+    });
 
     // Add to feature group
     drawnItemsRef.current.addLayer(pendingLayer);
@@ -402,20 +485,20 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     startBoundaryDraw: () => {
-      setDrawMode('boundary');
+      setDrawMode("boundary");
       if (mapInstanceRef.current) {
         new L.Draw.Polygon(mapInstanceRef.current, {
           shapeOptions: {
             color: "#ef4444",
             weight: 3,
             fillOpacity: 0,
-            dashArray: '5, 10'
+            dashArray: "5, 10",
           },
         }).enable();
       }
     },
     startPolygonDraw: () => {
-      setDrawMode('plot');
+      setDrawMode("plot");
       if (mapInstanceRef.current) {
         new L.Draw.Polygon(mapInstanceRef.current, {
           shapeOptions: {
@@ -427,7 +510,7 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
       }
     },
     startRectangleDraw: () => {
-      setDrawMode('plot');
+      setDrawMode("plot");
       if (mapInstanceRef.current) {
         new L.Draw.Rectangle(mapInstanceRef.current, {
           shapeOptions: {
@@ -639,6 +722,7 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
           onSubmit={handleFormSubmit}
           onCancel={handleFormCancel}
           mode={drawMode}
+          initialData={detectedParentArea || {}}
         />
       )}
 
@@ -659,19 +743,26 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
           <h3 className="text-sm font-semibold mb-3 text-white">Legend</h3>
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-xs text-gray-300">
-              <span style={{ border: '2px dashed #ef4444', width: '20px', height: '12px', borderRadius: '2px' }}></span>
+              <span
+                style={{
+                  border: "2px dashed #ef4444",
+                  width: "20px",
+                  height: "12px",
+                  borderRadius: "2px",
+                }}
+              ></span>
               <span>Industry Boundary</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-300">
-              <span className="w-5 h-3 rounded bg-[#4ade80] shadow-sm"></span>
+              <span className="w-5 h-3 rounded bg-[#15803d] shadow-sm"></span>
               <span>Available Plot</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-300">
-              <span className="w-5 h-3 rounded bg-[#f87171] shadow-sm"></span>
+              <span className="w-5 h-3 rounded bg-[#dc2626] shadow-sm"></span>
               <span>Allotted Plot</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-300">
-              <span className="w-5 h-3 rounded bg-[#60a5fa] shadow-sm"></span>
+              <span className="w-5 h-3 rounded bg-[#1e40af] shadow-sm"></span>
               <span>Unavailable Plot</span>
             </div>
           </div>
