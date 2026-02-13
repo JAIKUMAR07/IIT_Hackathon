@@ -58,6 +58,12 @@ function App() {
     }
   };
 
+  const handleHighlightPlot = () => {
+    if (mapRef.current?.highlightPlot) {
+      mapRef.current.highlightPlot();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a15] text-white">
       {/* Background Effects */}
@@ -81,6 +87,7 @@ function App() {
           onDrawPolygon={handleDrawPolygon}
           onDrawRectangle={handleDrawRectangle}
           onSearch={handleSearch}
+          onHighlightPlot={handleHighlightPlot}
           stats={stats}
         />
 

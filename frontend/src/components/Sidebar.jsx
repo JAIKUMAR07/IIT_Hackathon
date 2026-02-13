@@ -17,6 +17,7 @@ const Sidebar = ({
   onDrawPolygon,
   onDrawRectangle,
   onSearch,
+  onHighlightPlot,
   stats,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -174,6 +175,13 @@ const Sidebar = ({
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-2 mb-6">
+          <button
+            onClick={onHighlightPlot}
+            className="flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-lg text-white text-sm font-bold shadow-lg hover:shadow-cyan-500/50 transition-all hover:-translate-y-1 border border-cyan-300/30 group"
+          >
+            <MapPin className="w-5 h-5 group-hover:animate-bounce" />
+            Highlight Area (plot.json)
+          </button>
           <button
             onClick={onLoadImagery}
             className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-lg text-white text-sm font-semibold shadow-lg hover:shadow-xl hover:shadow-[#667eea]/50 transition-all hover:-translate-y-0.5"

@@ -558,6 +558,104 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
         }
       }, 2000);
     },
+    highlightPlot: async () => {
+      try {
+        const response = await fetch("/plot.json");
+        const data = await response.json();
+
+        if (!data || !Array.isArray(data)) return;
+
+        // UTM Zone 44N conversion logic
+        const utmToLatLng = (easting, northing) => {
+          const zone = 44;
+          const sa = 6378137.0;
+          const f = 1 / 298.257223563;
+          const e = Math.sqrt(2 * f - f * f);
+          const e2 = e * e;
+          const e4 = e2 * e2;
+          const e6 = e4 * e2;
+          const ep2 = e2 / (1 - e2);
+
+          const x = easting - 500000;
+          const y = northing;
+          const m = y / 0.9996;
+          const mu = m / (sa * (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256));
+
+          const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+          const J1 = (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32);
+          const J2 = (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32);
+          const J3 = (151 * e1 * e1 * e1 / 96);
+          const J4 = (1097 * e1 * e1 * e1 * e1 / 512);
+
+          const fp = mu + J1 * Math.sin(2 * mu) + J2 * Math.sin(4 * mu) + J3 * Math.sin(6 * mu) + J4 * Math.sin(8 * mu);
+
+          const C1 = ep2 * Math.pow(Math.cos(fp), 2);
+          const T1 = Math.pow(Math.tan(fp), 2);
+          const R1 = sa * (1 - e2) / Math.pow(1 - e2 * Math.pow(Math.sin(fp), 2), 1.5);
+          const N1 = sa / Math.sqrt(1 - e2 * Math.pow(Math.sin(fp), 2));
+          const D = x / (N1 * 0.9996);
+
+          let lat = fp - (N1 * Math.tan(fp) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * Math.pow(D, 4) / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * Math.pow(D, 6) / 720);
+          let lng = (D - (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 * C1 + 24 * T1 * T1) * Math.pow(D, 5) / 120) / Math.cos(fp);
+
+          lat = lat * 180 / Math.PI;
+          lng = lng * 180 / Math.PI + (zone * 6 - 183);
+
+          return [lat, lng];
+        };
+
+        const latlngs = data.map((coord) => utmToLatLng(coord[0], coord[1]));
+
+        if (mapInstanceRef.current && drawnItemsRef.current) {
+          // Clear previous drawings if needed or just add new one
+          // drawnItemsRef.current.clearLayers();
+
+          const polygon = L.polygon(latlngs, {
+            color: "#00ffff", // Bright Cyan
+            fillColor: "#00ffff",
+            fillOpacity: 0.4,
+            weight: 3,
+            className: "bright-highlight",
+          }).addTo(drawnItemsRef.current);
+
+          // Add a glow effect using a second polygon with larger weight and lower opacity
+          L.polygon(latlngs, {
+            color: "#00ffff",
+            fillColor: "transparent",
+            fillOpacity: 0,
+            weight: 8,
+            opacity: 0.3,
+            className: "glow-highlight",
+          }).addTo(drawnItemsRef.current);
+
+          // Zoom to the plot
+          mapInstanceRef.current.fitBounds(polygon.getBounds(), {
+            padding: [50, 50],
+            maxZoom: 18,
+            animate: true,
+            duration: 1.5,
+          });
+
+          // Add a popup
+          polygon.bindPopup(`
+            <div style="font-family: Inter, sans-serif; padding: 8px;">
+              <h4 style="margin: 0 0 4px 0; color: #00ffff; text-shadow: 0 0 2px rgba(0,0,0,0.5);">🌟 Highlighted Plot</h4>
+              <p style="margin: 0; font-size: 12px; color: #444;">Area loaded from plot.json</p>
+            </div>
+          `).openPopup();
+
+          if (onStatsUpdate) {
+            onStatsUpdate((prev) => ({
+              ...prev,
+              status: "Plot Highlighted",
+            }));
+            calculateStatistics(polygon);
+          }
+        }
+      } catch (error) {
+        console.error("Error highlighting plot:", error);
+      }
+    },
     performSearch: async (query) => {
       try {
         let lat, lng, displayName;

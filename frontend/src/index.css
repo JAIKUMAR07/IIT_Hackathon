@@ -107,3 +107,37 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+@keyframes pulse-cyan {
+  0% {
+    filter: drop-shadow(0 0 2px #00ffff);
+  }
+  50% {
+    filter: drop-shadow(0 0 10px #00ffff);
+  }
+  100% {
+    filter: drop-shadow(0 0 2px #00ffff);
+  }
+}
+
+.bright-highlight {
+  animation: pulse-cyan 3s infinite;
+}
+
+.glow-highlight {
+  filter: blur(4px);
+  animation: pulse-glow 3s infinite;
+}
+
+@keyframes pulse-glow {
+  0% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
