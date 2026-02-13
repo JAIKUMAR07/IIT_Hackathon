@@ -69,7 +69,10 @@ const Sidebar = ({
   const handleSuggestionClick = (suggestion) => {
     const name = suggestion.display_name;
     setSearchQuery(name.split(",")[0]);
-    handleSearch(name);
+    // Optimization: Pass full suggestion object to avoid re-fetching
+    if (onSearch) {
+      onSearch(suggestion);
+    }
     setSuggestions([]);
     setShowSuggestions(false);
   };

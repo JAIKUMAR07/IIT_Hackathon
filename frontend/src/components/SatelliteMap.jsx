@@ -477,39 +477,53 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
     },
     performSearch: async (query) => {
       try {
-        // Check if query is lat,lng coordinate
-        const coordRegex = /^(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)$/;
-        const match = query.match(coordRegex);
-
         let lat, lng, displayName;
 
-        if (match) {
-          lat = parseFloat(match[1]);
-          lng = parseFloat(match[3]);
-          displayName = `Coordinates: ${lat}, ${lng}`;
-        } else {
-          // Use Nominatim API for place search
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-              query,
-            )}&addressdetails=1`,
-          );
-          const data = await response.json();
+        // Optimization: Handle detailed location object directly from Sidebar
+        if (
+          typeof query === "object" &&
+          query !== null &&
+          query.lat &&
+          query.lon
+        ) {
+          lat = parseFloat(query.lat);
+          lng = parseFloat(query.lon);
+          displayName = query.display_name;
+        } else if (typeof query === "string") {
+          // Check if query is lat,lng coordinate
+          const coordRegex = /^(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)$/;
+          const match = query.match(coordRegex);
 
-          if (data && data.length > 0) {
-            lat = parseFloat(data[0].lat);
-            lng = parseFloat(data[0].lon);
-            displayName = data[0].display_name;
+          if (match) {
+            lat = parseFloat(match[1]);
+            lng = parseFloat(match[3]);
+            displayName = `Coordinates: ${lat}, ${lng}`;
           } else {
-            console.warn("Location not found");
-            if (onStatsUpdate) {
-              onStatsUpdate((prev) => ({
-                ...prev,
-                status: "Location not found",
-              }));
+            // Use Nominatim API for place search
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+                query,
+              )}&addressdetails=1`,
+            );
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+              lat = parseFloat(data[0].lat);
+              lng = parseFloat(data[0].lon);
+              displayName = data[0].display_name;
+            } else {
+              console.warn("Location not found");
+              if (onStatsUpdate) {
+                onStatsUpdate((prev) => ({
+                  ...prev,
+                  status: "Location not found",
+                }));
+              }
+              return;
             }
-            return;
           }
+        } else {
+          return;
         }
 
         if (mapInstanceRef.current) {
