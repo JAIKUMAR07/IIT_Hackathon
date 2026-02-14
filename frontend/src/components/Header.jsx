@@ -1,15 +1,17 @@
-import { useState } from "react";
-import { Map, BarChart3, FileText, Bell, Settings } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Map, BarChart3, FileText, Bell, Settings, LayoutDashboard } from "lucide-react";
 
 const Header = () => {
-  const [activeView, setActiveView] = useState("map");
+  const location = useLocation();
+
+  const isActive = (path) => location.pathname === path;
 
   return (
-    <header className="sticky top-0 z-1000 bg-white/5 backdrop-blur-md border-b border-white/10 shadow-lg">
+    <header className="sticky top-0 z-[1000] bg-[#0a0a15]/80 backdrop-blur-md border-b border-white/10 shadow-lg">
       <div className="flex items-center justify-between px-8 py-4 gap-6">
         {/* Logo Section */}
-        <div className="flex items-center gap-4">
-          <div className="animate-float">
+        <Link to="/" className="flex items-center gap-4 group">
+          <div className="animate-float group-hover:scale-110 transition-transform">
             <svg
               width="40"
               height="40"
@@ -34,46 +36,45 @@ const Header = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold bg-linear-to-r from-[#667eea] to-[#764ba2] bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-[#667eea] to-[#764ba2] bg-clip-text text-transparent">
               LandWatch
             </h1>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 font-medium">
               Industrial Compliance Monitor
             </p>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Menu */}
         <nav className="flex gap-2">
-          <button
-            onClick={() => setActiveView("map")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeView === "map"
-                ? "bg-linear-to-r from-[#667eea] to-[#764ba2] text-white shadow-lg"
-                : "text-gray-300 hover:text-white hover:bg-white/5"
-            }`}
+          <Link
+            to="/"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive("/")
+              ? "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-[0_0_20px_rgba(102,126,234,0.3)]"
+              : "text-gray-300 hover:text-white hover:bg-white/5"
+              }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            Dashboard
+          </Link>
+          <Link
+            to="/map"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive("/map")
+              ? "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-[0_0_20px_rgba(102,126,234,0.3)]"
+              : "text-gray-300 hover:text-white hover:bg-white/5"
+              }`}
           >
             <Map className="w-5 h-5" />
             Map View
-          </button>
+          </Link>
           <button
-            onClick={() => setActiveView("analysis")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeView === "analysis"
-                ? "bg-linear-to-r from-[#667eea] to-[#764ba2] text-white shadow-lg"
-                : "text-gray-300 hover:text-white hover:bg-white/5"
-            }`}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all"
           >
             <BarChart3 className="w-5 h-5" />
             Analysis
           </button>
           <button
-            onClick={() => setActiveView("reports")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeView === "reports"
-                ? "bg-linear-to-r from-[#667eea] to-[#764ba2] text-white shadow-lg"
-                : "text-gray-300 hover:text-white hover:bg-white/5"
-            }`}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all"
           >
             <FileText className="w-5 h-5" />
             Reports
@@ -82,14 +83,14 @@ const Header = () => {
 
         {/* Header Actions */}
         <div className="flex gap-2">
-          <button className="relative w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all hover:-translate-y-0.5">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-xs font-semibold flex items-center justify-center animate-pulse">
+          <button className="relative w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all hover:-translate-y-0.5 group">
+            <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center shadow-lg border-2 border-[#0a0a15] animate-pulse">
               3
             </span>
           </button>
-          <button className="w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all hover:-translate-y-0.5">
-            <Settings className="w-5 h-5" />
+          <button className="w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/10 hover:border-white/20 hover:text-white transition-all hover:-translate-y-0.5 group">
+            <Settings className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
           </button>
         </div>
       </div>
@@ -97,4 +98,6 @@ const Header = () => {
   );
 };
 
+
 export default Header;
+

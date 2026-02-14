@@ -7,6 +7,9 @@ import {
   RefreshCw,
   Scan,
   MapPin,
+  Upload,
+  FileText,
+  CheckCircle2,
 } from "lucide-react";
 
 const Sidebar = ({
@@ -24,6 +27,9 @@ const Sidebar = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const searchTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -77,14 +83,74 @@ const Sidebar = ({
     }
     setSuggestions([]);
     setShowSuggestions(false);
+    setCurrentStep(2); // Move to upload step
   };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setIsUploading(true);
+      // Simulate upload and AI processing
+      setTimeout(() => {
+        setIsUploading(false);
+        setCurrentStep(3);
+        if (onLoadImagery) onLoadImagery();
+      }, 2000);
+    }
+  };
+
+  const steps = [
+    { id: 1, title: "Select Region", icon: MapPin },
+    { id: 2, title: "Upload Image", icon: Upload },
+    { id: 3, title: "AI Detection", icon: Scan },
+    { id: 4, title: "Comparison", icon: RefreshCw },
+    { id: 5, title: "Report", icon: FileText },
+  ];
 
   return (
     <aside className="w-full h-full bg-white/5 backdrop-blur-md border-r border-white/10 overflow-y-auto">
       <div className="p-8">
-        <h2 className="text-xl font-bold mb-6 bg-gradient-to-r from-[#667eea] to-[#764ba2] bg-clip-text text-transparent">
-          Map Controls
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-[#667eea] to-[#764ba2] bg-clip-text text-transparent">
+            Compliance Monitor
+          </h2>
+          <div className="flex gap-1">
+            {steps.map((s) => (
+              <div
+                key={s.id}
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentStep >= s.id ? "bg-[#667eea]" : "bg-white/10"
+                  } ${currentStep === s.id ? "ring-4 ring-[#667eea]/20 scale-125" : ""}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Workflow Guide */}
+        <div className="mb-8 p-4 bg-white/5 border border-white/10 rounded-xl">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3">Workflow Progress</p>
+          <div className="flex items-center justify-between relative">
+            <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-white/10 -z-10" />
+            {steps.map((s) => {
+              const Icon = s.icon;
+              const isActive = currentStep === s.id;
+              const isCompleted = currentStep > s.id;
+              return (
+                <div key={s.id} className="flex flex-col items-center gap-2 group cursor-help" title={s.title}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isActive ? "bg-[#667eea] text-white shadow-lg shadow-[#667eea]/40 scale-110" :
+                    isCompleted ? "bg-[#43e97b]/20 text-[#43e97b]" : "bg-white/5 text-gray-500"
+                    }`}>
+                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 text-center">
+            <p className="text-sm font-bold text-white whitespace-nowrap overflow-hidden text-ellipsis">
+              Step {currentStep}: {steps[currentStep - 1].title}
+            </p>
+          </div>
+        </div>
 
         {/* Location Search */}
         <div className="mb-6 relative">
@@ -174,11 +240,57 @@ const Sidebar = ({
           </div>
         </div>
 
+        {/* Action Buttons */}
+        <div className="flex flex-col gap-3 mb-8">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+            accept="image/*"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className={`flex items-center justify-center gap-3 px-6 py-4 rounded-xl text-sm font-bold transition-all hover:-translate-y-1 ${isUploading
+              ? "bg-white/5 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-xl shadow-[#667eea]/30"
+              }`}
+          >
+            {isUploading ? (
+              <>
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                AI Processing...
+              </>
+            ) : (
+              <>
+                <Upload className="w-5 h-5" />
+                Upload Satellite Image
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              onAnalyzeChanges();
+              setCurrentStep(4);
+            }}
+            disabled={currentStep < 3}
+            className={`flex items-center justify-center gap-3 px-6 py-4 rounded-xl text-sm font-bold border transition-all ${currentStep < 3
+              ? "bg-white/5 border-white/5 text-gray-600 cursor-not-allowed"
+              : "bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/30 hover:-translate-y-1"
+              }`}
+          >
+            <Scan className="w-5 h-5" />
+            Run Compliance Check
+          </button>
+        </div>
+
         {/* Plot Selection */}
         <div className="mb-6">
           <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
             <MapPin className="w-4 h-4 text-cyan-400" />
-            Select Plot
+            Industrial Region
           </label>
           <select
             onChange={(e) => {
@@ -188,14 +300,16 @@ const Sidebar = ({
                   label: e.target.options[e.target.selectedIndex].text,
                   color: "#00ffff",
                   isComparison: false,
+                  autoAnalyze: true,
                 });
+                if (currentStep < 2) setCurrentStep(2);
               }
             }}
-            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-400 transition-all appearance-none cursor-pointer"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-400 transition-all appearance-none cursor-pointer hover:bg-white/10"
           >
-            <option value="" className="bg-[#0a0a15]">Choose a Plot...</option>
-            <option value="/plot.json" className="bg-[#0a0a15]">Plot 1 (Primary)</option>
-            <option value="/plot2.json" className="bg-[#0a0a15]">Plot 2 (Secondary)</option>
+            <option value="" className="bg-[#0a0a15]">Choose a Region...</option>
+            <option value="/plot.json" className="bg-[#0a0a15]">TILDA INDUSTRIAL PARK</option>
+            <option value="/plot2.json" className="bg-[#0a0a15]">BARTORI SECTOR</option>
           </select>
         </div>
 
@@ -203,7 +317,7 @@ const Sidebar = ({
         <div className="mb-6">
           <label className="flex items-center gap-2 text-sm font-semibold text-white mb-2">
             <RefreshCw className="w-4 h-4 text-orange-400" />
-            Comparison Data
+            Comparison (Reference Map)
           </label>
           <select
             onChange={(e) => {
@@ -214,32 +328,15 @@ const Sidebar = ({
                   color: "#ff8c00", // Orange for comparison
                   isComparison: true,
                 });
+                setCurrentStep(4);
               }
             }}
-            className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-orange-400 transition-all appearance-none cursor-pointer"
+            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-orange-400 transition-all appearance-none cursor-pointer hover:bg-white/10"
           >
-            <option value="" className="bg-[#0a0a15]">Select Comparison...</option>
-            <option value="/comparison.json" className="bg-[#0a0a15]">Comparison 1</option>
-            <option value="/comparison3.json" className="bg-[#0a0a15]">Comparison 2</option>
+            <option value="" className="bg-[#0a0a15]">Select Allotment Data...</option>
+            <option value="/comparison.json" className="bg-[#0a0a15]">Allotment_Ref_2023</option>
+            <option value="/comparison3.json" className="bg-[#0a0a15]">CSIDC_Base_Map_V2</option>
           </select>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-2 mb-6">
-          <button
-            onClick={onLoadImagery}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-lg text-white text-sm font-semibold shadow-lg hover:shadow-xl hover:shadow-[#667eea]/50 transition-all hover:-translate-y-0.5"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Load Imagery
-          </button>
-          <button
-            onClick={onAnalyzeChanges}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-lg text-white text-sm font-semibold hover:bg-white/10 hover:border-white/20 transition-all hover:-translate-y-0.5"
-          >
-            <Scan className="w-4 h-4" />
-            Analyze Changes
-          </button>
         </div>
 
         {/* Analysis Summary */}
@@ -260,10 +357,14 @@ const Sidebar = ({
               </div>
             </div>
             <button
-              onClick={onShowDetails}
-              className="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-white text-xs font-bold transition-all active:scale-95"
+              onClick={() => {
+                onShowDetails();
+                setCurrentStep(5);
+              }}
+              className="w-full py-3 bg-gradient-to-r from-[#ff00ff] to-[#7000ff] hover:shadow-lg hover:shadow-[#ff00ff]/40 rounded-xl text-white text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
             >
-              View Full Details
+              <FileText className="w-4 h-4" />
+              Generate Compliance Report
             </button>
           </div>
         )}

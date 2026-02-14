@@ -1,11 +1,62 @@
-import { X, TrendingUp, TrendingDown, Target, Info } from "lucide-react";
+import { X, TrendingUp, TrendingDown, Target, Info, Download } from "lucide-react";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 const AnalysisModal = ({ isOpen, onClose, data }) => {
     if (!isOpen || !data) return null;
 
+    const handleDownloadPDF = async () => {
+        const modalElement = document.getElementById("analysis-modal-content");
+        if (!modalElement) return;
+
+        try {
+            // Add a small delay to ensure any opening animations are complete
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            const canvas = await html2canvas(modalElement, {
+                backgroundColor: "#111122", // Match modal background
+                scale: 2, // High resolution
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+                onclone: (clonedDoc) => {
+                    // Optional: Modify the cloned document if needed (e.g. remove fixed positioning)
+                    const element = clonedDoc.getElementById("analysis-modal-content");
+                    if (element) {
+                        element.style.transform = 'none';
+                        element.style.animation = 'none';
+                    }
+                }
+            });
+
+            const imgData = canvas.toDataURL("image/png");
+
+            // Create PDF with A4 dimensions in pixels (at 72 DPI)
+            // or just use mm for easier scaling
+            const pdf = new jsPDF({
+                orientation: "portrait",
+                unit: "mm",
+                format: "a4"
+            });
+
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Spatial_Analysis_Report_${new Date().getTime()}.pdf`);
+        } catch (error) {
+            console.error("PDF Generation failed:", error);
+            alert("Failed to generate PDF. Please try again.");
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#0a0a15]/80 backdrop-blur-sm">
-            <div className="relative w-full max-w-2xl bg-[#111122] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#0a0a15]/80 backdrop-blur-sm transition-all">
+            <div
+                id="analysis-modal-content"
+                className="relative w-full max-w-2xl bg-[#111122] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300"
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-[#667eea]/10 to-transparent">
                     <div className="flex items-center gap-3">
@@ -91,16 +142,23 @@ const AnalysisModal = ({ isOpen, onClose, data }) => {
                             Positive values indicate area expansion in the primary dataset, while negative values reflect reduction compared to historical ground truth.
                         </p>
                     </div>
-                </div>
 
-                {/* Footer */}
-                <div className="p-6 bg-black/20 border-t border-white/10 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-lg text-white font-semibold hover:shadow-lg hover:shadow-[#667eea]/40 transition-all active:scale-95"
-                    >
-                        Acknowledge Analysis
-                    </button>
+                    {/* Footer Buttons */}
+                    <div className="mt-8 flex gap-3">
+                        <button
+                            onClick={handleDownloadPDF}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-semibold hover:bg-white/10 transition-all active:scale-95 group"
+                        >
+                            <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                            Download Report
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="flex-1 px-6 py-3 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-xl text-white font-semibold hover:shadow-lg hover:shadow-[#667eea]/40 transition-all active:scale-95"
+                        >
+                            Acknowledge
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

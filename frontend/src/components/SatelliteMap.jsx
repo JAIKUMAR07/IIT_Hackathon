@@ -10,6 +10,7 @@ import * as turf from "@turf/turf";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import "leaflet-draw";
+import html2canvas from "html2canvas";
 import BoundaryForm from "./BoundaryForm";
 
 const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
@@ -537,30 +538,153 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
       }
     },
     loadImagery: () => {
-      console.log("Loading satellite imagery...");
-      // Placeholder for GEE integration
+      console.log("AI Boundary Detection started...");
       if (onStatsUpdate) {
-        onStatsUpdate((prev) => ({ ...prev, status: "Loading imagery..." }));
+        onStatsUpdate((prev) => ({ ...prev, status: "AI Detecting Boundaries..." }));
       }
+
+      // Simulate AI finding the current boundary
       setTimeout(() => {
+        // Use an internal function call or just re-use highlightPlot logic
+        // For demonstration, let's highlight 'plot.json' as the AI-detected boundary
+        const self = ref.current;
+        if (self && self.highlightPlot) {
+          self.highlightPlot({
+            filename: "/plot.json",
+            label: "AI Detected Boundary (Current)",
+            color: "#00ffff",
+            isComparison: false,
+          });
+        }
+
         if (onStatsUpdate) {
-          onStatsUpdate((prev) => ({ ...prev, status: "Ready" }));
+          onStatsUpdate((prev) => ({ ...prev, status: "AI Detection Complete" }));
         }
       }, 2000);
     },
     analyzeChanges: () => {
-      console.log("Analyzing changes...");
-      // Placeholder for change detection
+      console.log("Performing Spatial Compliance Analysis...");
       if (onStatsUpdate) {
-        onStatsUpdate((prev) => ({ ...prev, status: "Analyzing..." }));
+        onStatsUpdate((prev) => ({ ...prev, status: "Comparing with Allotment Map..." }));
       }
+
+      // Simulate comparing with the base reference map
       setTimeout(() => {
-        if (onStatsUpdate) {
-          onStatsUpdate((prev) => ({ ...prev, status: "Analysis complete" }));
+        const self = ref.current;
+        if (self && self.highlightPlot) {
+          self.highlightPlot({
+            filename: "/comparison.json",
+            label: "CSIDC Allotment Plan (Reference)",
+            color: "#ff8c00",
+            isComparison: true,
+          });
         }
-      }, 2000);
+
+        if (onStatsUpdate) {
+          onStatsUpdate((prev) => ({ ...prev, status: "Analysis Complete" }));
+        }
+      }, 2500);
     },
-    highlightPlot: async (config = { filename: "/plot.json", label: "Highlighted Plot", color: "#00ffff", isComparison: false }) => {
+    captureMapScreenshot: async () => {
+      if (!mapRef.current) return null;
+
+      // We want to capture the map element
+      const mapElement = mapRef.current;
+
+      try {
+        // Use html2canvas to capture the map
+        // We set useCORS to true to capture satellite tiles
+        const canvas = await html2canvas(mapElement, {
+          useCORS: true,
+          logging: false,
+          allowTaint: true,
+          backgroundColor: "#0a0a15",
+        });
+
+        return canvas.toDataURL("image/jpeg", 0.8);
+      } catch (error) {
+        console.error("Screenshot failed:", error);
+        return null;
+      }
+    },
+    analyzeWithGemini: async (plotConfig) => {
+      console.log("Starting AI Analysis Flow...");
+      if (onStatsUpdate) {
+        onStatsUpdate(prev => ({ ...prev, status: "Capturing Satellite View..." }));
+      }
+
+      // 1. Capture screenshot
+      const self = ref.current;
+      const screenshot = await self.captureMapScreenshot();
+
+      if (!screenshot) {
+        if (onStatsUpdate) onStatsUpdate(prev => ({ ...prev, status: "Screenshot Failed" }));
+        return;
+      }
+
+      if (onStatsUpdate) {
+        onStatsUpdate(prev => ({ ...prev, status: "Sending to Gemini AI..." }));
+      }
+
+      // 2. Prepare Form Data
+      const formData = new FormData();
+      // Convert dataURL to Blob
+      const res = await fetch(screenshot);
+      const blob = await res.blob();
+      formData.append("image", blob, "screenshot.jpg");
+      formData.append("plot_info", JSON.stringify(plotConfig));
+
+      try {
+        // 3. Call Backend
+        const response = await fetch("http://localhost:8000/analyze", {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+        console.log("AI Analysis Result:", result);
+
+        // 4. Reflect on Map
+        if (result.detected_boundaries && result.detected_boundaries.length > 0) {
+          // Create a new layer for AI detected boundary
+          const aiLayer = L.polygon(result.detected_boundaries, {
+            color: "#f0f",
+            fillColor: "#f0f",
+            fillOpacity: 0.2,
+            weight: 3,
+            dashArray: "5, 5",
+          }).addTo(drawnItemsRef.current);
+
+          aiLayer.bindPopup(`
+             <div style="font-family: Inter, sans-serif; padding: 10px;">
+               <h4 style="margin: 0; color: #f0f;">🤖 AI Detected Boundary</h4>
+               <p style="font-size: 12px; margin: 4px 0;">${result.summary}</p>
+               <div style="font-weight: bold; color: ${result.encroachment_detected ? '#ef4444' : '#43e97b'}">
+                 ${result.encroachment_detected ? '🚨 Encroachment Detected' : '✅ Compliance Verified'}
+               </div>
+             </div>
+           `).openPopup();
+        }
+
+        if (onStatsUpdate) {
+          onStatsUpdate(prev => ({
+            ...prev,
+            status: "AI Analysis Complete",
+            analysis: {
+              ...prev.analysis,
+              summary: result.summary,
+              matchPercentage: result.match_percentage,
+              encroachmentDetected: result.encroachment_detected
+            }
+          }));
+        }
+
+      } catch (error) {
+        console.error("Backend communication failed:", error);
+        if (onStatsUpdate) onStatsUpdate(prev => ({ ...prev, status: "AI Backend Error" }));
+      }
+    },
+    highlightPlot: async (config = { filename: "/plot.json", label: "Highlighted Plot", color: "#00ffff", isComparison: false, autoAnalyze: false }) => {
       try {
         const { filename, label, color, isComparison } = config;
         const response = await fetch(filename);
@@ -760,6 +884,13 @@ const SatelliteMap = forwardRef(({ onStatsUpdate }, ref) => {
             `).openPopup();
 
             calculateStatistics(polygon);
+
+            // Auto-trigger AI Analysis if requested
+            if (config.autoAnalyze) {
+              setTimeout(() => {
+                ref.current.analyzeWithGemini(config);
+              }, 1500); // Small delay to let map settle
+            }
           }
         }
       } catch (error) {
